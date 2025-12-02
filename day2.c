@@ -36,7 +36,44 @@ static int num_digits(ull x) {
     return d;
 }
 
-//sum invalid ids: https://adventofcode.com/2025/day/2
+static bool in_intervals(const Interval *merged, const size_t m, const ull N) {
+    size_t lo = 0, hi = m;
+    while (lo < hi) {
+        const size_t mid = (lo + hi) / 2;
+        if (N < merged[mid].L) {
+            hi = mid;
+        } else if (N > merged[mid].R) {
+            lo = mid + 1;
+        } else {
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool has_smaller_period(ull N, int k) {
+    char buf[32];
+    int len = snprintf(buf, sizeof(buf), "%llu", N);
+    if (len <= 0) return false;
+
+    for (int d = 1; d < k; d++) {
+        if (k % d != 0) continue;
+
+        bool ok = true;
+        for (int i = d; i < len; i++) {
+            if (buf[i] != buf[i % d]) {
+                ok = false;
+                break;
+            }
+        }
+        if (ok) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// https://adventofcode.com/2025/day/2 part 2
 int aocday2(const char *input_raw, unsigned long long *sum_out) {
     char *input = strdup(input_raw);
     if (!input) return 0;
@@ -51,46 +88,28 @@ int aocday2(const char *input_raw, unsigned long long *sum_out) {
         while (*t && isspace((unsigned char)*t)) t++;
         if (*t == '\0') continue;
         char *dash = strchr(t, '-');
-        if (!dash) {
-            fprintf(stderr, "Invalid token (no dash): '%s'\n", t);
-            continue;
-        }
+        if (!dash) continue;
         *dash = '\0';
         char *left = t;
         char *right = dash + 1;
-        char *end;
-
-        end = left + strlen(left) - 1;
-        while (end >= left && isspace((unsigned char)*end)) {
-            *end = '\0';
-            end--;
-        }
-
+        char *end = left + strlen(left) - 1;
+        while (end >= left && isspace((unsigned char)*end)) *end-- = '\0';
         while (*right && isspace((unsigned char)*right)) right++;
         end = right + strlen(right) - 1;
-        while (end >= right && isspace((unsigned char)*end)) {
-            *end = '\0';
-            end--;
-        }
+        while (end >= right && isspace((unsigned char)*end)) *end-- = '\0';
 
-        if (*left == '\0' || *right == '\0') {
-            fprintf(stderr, "Invalid range part in token: '%s-%s'\n", left, right);
-            continue;
-        }
+        if (*left == '\0' || *right == '\0') continue;
 
         ull L = strtoull(left, NULL, 10);
         ull R = strtoull(right, NULL, 10);
-        if (L > R) {
-            ull tmp = L;
-            L = R;
-            R = tmp;
-        }
+        if (L > R) { ull t2 = L; L = R; R = t2; }
 
         if (n == cap) {
             cap = cap ? cap * 2 : 16;
             intervals = realloc(intervals, cap * sizeof(Interval));
             if (!intervals) {
                 fprintf(stderr, "Out of memory\n");
+                free(input);
                 return 1;
             }
         }
@@ -99,6 +118,7 @@ int aocday2(const char *input_raw, unsigned long long *sum_out) {
         n++;
     }
 
+    free(input);
     if (n == 0) {
         *sum_out = 0;
         free(intervals);
@@ -129,63 +149,58 @@ int aocday2(const char *input_raw, unsigned long long *sum_out) {
     }
 
     free(intervals);
-    intervals = NULL;
 
     ull maxR = 0;
-    for (size_t i = 0; i < m; i++) {
-        if (merged[i].R > maxR) maxR = merged[i].R;
-    }
+    for (size_t i = 0; i < m; i++) if (merged[i].R > maxR) maxR = merged[i].R;
 
     int maxDigits = num_digits(maxR);
-    int maxHalf = maxDigits / 2;
-
-    if (maxHalf == 0) {
+    if (maxDigits < 2) {
         *sum_out = 0;
         free(merged);
         return 0;
     }
 
     ull sum = 0;
-    size_t j = 0;
-    bool done = false;
 
-    ull pow10 = 1;
-    for (int i = 0; i < maxHalf; i++) {
-        pow10 *= 10;
-    }
-
-    for (int k = 1; k <= maxHalf && !done; k++) {
+    for (int k = 1; k <= maxDigits - 1; k++) {
         ull base = 1;
         for (int i = 0; i < k; i++) base *= 10;
         ull startA = base / 10;
         ull endA   = base - 1;
 
-        for (ull A = startA; A <= endA; A++) {
-            if (A > (ULLONG_MAX - A) / base) {
-                done = true;
-                break;
-            }
-            ull N = A * base + A;
-            if (N > maxR) {
-                break;
-            }
+        int maxRep = maxDigits / k;
+        if (maxRep < 2) continue;
 
-            while (j < m && N > merged[j].R) {
-                j++;
-            }
-            if (j >= m) {
-                done = true;
-                break;
-            }
+        for (int rep = 2; rep <= maxRep; rep++) {
+            for (ull A = startA; A <= endA; A++) {
+                ull N = 0;
+                bool overflow = false;
 
-            if (N >= merged[j].L && N <= merged[j].R) {
-                sum += N;
+                for (int r = 0; r < rep; r++) {
+                    if (N > (ULLONG_MAX - A) / base) {
+                        overflow = true;
+                        break;
+                    }
+                    N = N * base + A;
+                }
+                if (overflow) break;
+
+                if (N > maxR) {
+                    break;
+                }
+
+                if (has_smaller_period(N, k)) {
+                    continue;
+                }
+
+                if (in_intervals(merged, m, N)) {
+                    sum += N;
+                }
             }
         }
     }
 
-    *sum_out = sum;
-
     free(merged);
+    *sum_out = sum;
     return 0;
 }
