@@ -15,7 +15,7 @@ char **read_lines(const char *filename, size_t *out_len) {
         perror("fopen");
         return nullptr;
     }
-    size_t cap   = 16;
+    size_t cap = 16;
     size_t count = 0;
     char **lines = malloc(cap * sizeof *lines);
     if (!lines) {
@@ -64,7 +64,7 @@ void free_lines(char **lines, size_t len) {
 }
 
 int main(void) {
-    int rc;
+    int rc = 0;
 
     goto laocday3;
 
