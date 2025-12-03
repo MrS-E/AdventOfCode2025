@@ -3,9 +3,12 @@
 #include <string.h>
 #include <stdint.h>
 #include "day2.c"
+#include "day3.c"
 
+#define ARRAY_LEN(arr) (sizeof(arr) / sizeof((arr)[0]))
 #define DAY2INPUT_DEMO "11-22,95-115,998-1012,1188511880-1188511890,222220-222224,1698522-1698528,446443-446449,38593856-38593862,565653-565659, 824824821-824824827,2121212118-2121212124"
-#define DAY2INPUT "492410748-492568208,246-390,49-90,16-33,142410-276301,54304-107961,12792-24543,3434259704-3434457648,848156-886303,152-223,1303-1870,8400386-8519049,89742532-89811632,535853-567216,6608885-6724046,1985013826-1985207678,585591-731454,1-13,12067202-12233567,6533-10235,6259999-6321337,908315-972306,831-1296,406-824,769293-785465,3862-5652,26439-45395,95-136,747698990-747770821,984992-1022864,34-47,360832-469125,277865-333851,2281-3344,2841977-2953689,29330524-29523460"
+#define DAY3INPUT_DEMO (const char *[]){"987654321111111","811111111111119","234234234234278","818181911112111"}
+
 char **read_lines(const char *filename, size_t *out_len) {
     FILE *f = fopen(filename, "r");
     if (!f) {
@@ -63,11 +66,8 @@ void free_lines(char **lines, size_t len) {
 int main(void) {
     int rc;
 
-    unsigned long long day2;
-    size_t day2len = 0;
-    char **day2lines = read_lines("day2input", &day2len);
-    rc = aocday2(day2lines[0], &day2);
-    printf("Day 2: %llu\n", day2);
+    goto laocday3;
+
     laocday2:
     {
         unsigned long long day2;
@@ -77,5 +77,16 @@ int main(void) {
         free_lines(day2lines, day2len);
         printf("Day 2: %llu\n", day2);
     }
+
+    laocday3:
+    {
+        uint32_t day3;
+        size_t day3len = 0;
+        char **day3lines = read_lines("day3input", &day3len);
+        if (day3lines != nullptr) rc = aocday3(day3lines, day3len, &day3);
+        free_lines(day3lines, day3len);
+        printf("Day 3: %u\n", day3);
+    }
+
     return rc;
 }
