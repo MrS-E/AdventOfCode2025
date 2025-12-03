@@ -80,12 +80,12 @@ int main(void) {
 
     laocday3:
     {
-        uint32_t day3;
+        uint64_t day3;
         size_t day3len = 0;
         char **day3lines = read_lines("day3input", &day3len);
         if (day3lines != nullptr) rc = aocday3(day3lines, day3len, &day3);
         free_lines(day3lines, day3len);
-        printf("Day 3: %u\n", day3);
+        printf("Day 3: %lu\n", day3);
     }
 
     return rc;
