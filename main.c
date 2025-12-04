@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include "day2.c"
 #include "day3.c"
+#include "day4.c"
 
 #define ARRAY_LEN(arr) (sizeof(arr) / sizeof((arr)[0]))
 #define DAY2INPUT_DEMO "11-22,95-115,998-1012,1188511880-1188511890,222220-222224,1698522-1698528,446443-446449,38593856-38593862,565653-565659, 824824821-824824827,2121212118-2121212124"
@@ -66,7 +67,7 @@ void free_lines(char **lines, size_t len) {
 int main(void) {
     int rc = 0;
 
-    goto laocday3;
+    goto laocday4;
 
     laocday2:
     {
@@ -86,6 +87,16 @@ int main(void) {
         if (day3lines != nullptr) rc = aocday3(day3lines, day3len, &day3);
         free_lines(day3lines, day3len);
         printf("Day 3: %lu\n", day3);
+    }
+
+    laocday4:
+    {
+        uint16_t day4;
+        size_t day4len = 0;
+        char **day4lines = read_lines("day4input", &day4len);
+        aocday4(day4lines, day4len, strlen(day4lines[0]), &day4);
+        free_lines(day4lines, day4len);
+        printf("Day 4: %u\n", day4);
     }
 
     return rc;
