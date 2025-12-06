@@ -5,6 +5,7 @@
 #include "day2.c"
 #include "day3.c"
 #include "day4.c"
+#include "day6.c"
 
 #define ARRAY_LEN(arr) (sizeof(arr) / sizeof((arr)[0]))
 #define DAY2INPUT_DEMO "11-22,95-115,998-1012,1188511880-1188511890,222220-222224,1698522-1698528,446443-446449,38593856-38593862,565653-565659, 824824821-824824827,2121212118-2121212124"
@@ -67,7 +68,7 @@ void free_lines(char **lines, size_t len) {
 int main(void) {
     int rc = 0;
 
-    goto laocday4;
+    goto laocday6;
 
     laocday2:
     {
@@ -97,6 +98,16 @@ int main(void) {
         aocday4(day4lines, day4len, strlen(day4lines[0]), &day4);
         free_lines(day4lines, day4len);
         printf("Day 4: %u\n", day4);
+    }
+
+    laocday6:
+    {
+        long long day6;
+        size_t day6len = 0;
+        char **day6lines = read_lines("day6input", &day6len);
+        aocday6(day6lines, (int) day6len, &day6);
+        free_lines(day6lines, day6len);
+        printf("Day 6: %lld\n", day6);
     }
 
     return rc;

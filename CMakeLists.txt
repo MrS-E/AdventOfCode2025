@@ -6,4 +6,5 @@ set(CMAKE_C_STANDARD 11)
 add_executable(AdventOfCode2025 main.c
         day2.c
         day3.c
-        day4.c)
+        day4.c
+        day6.c)
