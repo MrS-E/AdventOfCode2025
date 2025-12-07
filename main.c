@@ -67,6 +67,8 @@ int main(void) {
 
     goto laocday7;
 
+    laocday1:
+
     laocday2:
     {
         unsigned long long day2;
@@ -97,6 +99,8 @@ int main(void) {
         printf("Day 4: %u\n", day4);
     }
 
+    laocday5:
+
     laocday6:
     {
         long long day6;
@@ -109,12 +113,12 @@ int main(void) {
 
     laocday7:
     {
-        int day7;
+        long long day7;
         size_t day7len = 0;
         char **day7lines = read_lines("day7input", &day7len);
         rc = aocday7(day7lines, day7len, &day7);
         free_lines(day7lines, day7len);
-        printf("Day 7: %d\n", day7);
+        printf("Day 7: %lld\n", day7);
     }
     return rc;
 }

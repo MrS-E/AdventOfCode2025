@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-int aocday7(char **grid, size_t rows, int *result){
+int aocday7(char **grid, size_t rows, long long *result){
     if (!grid || !result || rows < 1) {
         return -1;
     }
@@ -35,43 +35,40 @@ int aocday7(char **grid, size_t rows, int *result){
         return -3;
     }
 
-    char *current = (char *)calloc((size_t)cols, sizeof(char));
-    char *next    = (char *)calloc((size_t)cols, sizeof(char));
+    long long *current = (long long *)calloc((size_t)cols, sizeof(long long));
+    long long *next    = (long long *)calloc((size_t)cols, sizeof(long long));
     if (!current || !next) {
         free(current);
         free(next);
         *result = 0;
         return -1;
     }
-
-    int splits = 0;
-
     current[start_col] = 1;
 
     for (int r = start_row; r < rows - 1; r++) {
         int any_next = 0;
-        memset(next, 0, (size_t)cols);
+        memset(next, 0, (size_t)cols * sizeof(long long));
         for (int c = 0; c < cols; c++) {
-            if (!current[c]) {
+            long long ways = current[c];
+            if (ways == 0) {
                 continue;
             }
             char below = grid[r + 1][c];
             if (below == '.' || below == 'S') {
-                next[c] = 1;
+                next[c] += ways;
             } else if (below == '^') {
-                splits++;
                 if (c - 1 >= 0) {
-                    next[c - 1] = 1;
+                    next[c - 1] += ways;
                 }
                 if (c + 1 < cols) {
-                    next[c + 1] = 1;
+                    next[c + 1] += ways;
                 }
             }
         }
 
         for (int c = 0; c < cols; c++) {
             current[c] = next[c];
-            if (next[c]) {
+            if (next[c] != 0) {
                 any_next = 1;
             }
         }
@@ -80,8 +77,13 @@ int aocday7(char **grid, size_t rows, int *result){
         }
     }
 
+    long long total_timelines = 0;
+    for (int c = 0; c < cols; c++) {
+        total_timelines += current[c];
+    }
+
     free(current);
     free(next);
-    *result = splits;
+    *result = total_timelines;
     return 0;
 }
