@@ -22,29 +22,12 @@ static char char_at(char **lines, int *rowLens, int r, int c) {
     return lines[r][c];
 }
 
-static void process_segment(char **lines, int rows, int *rowLens, int startCol, int endCol, long long *total) {
-    long long nums[256];
+static void process_segment_part2(char **lines, int rows, int *rowLens, int startCol, int endCol, long long *total) {
+    long long nums[512];
     int numCount = 0;
     char op = 0;
-
-    for (int r = 0; r < rows - 1; r++) {
-        char buf[64];
-        int bi = 0;
-
-        for (int c = startCol; c <= endCol; c++) {
-            char ch = char_at(lines, rowLens, r, c);
-            if (isdigit((unsigned char)ch)) {
-                buf[bi++] = ch;
-            }
-        }
-
-        if (bi > 0) {
-            buf[bi] = '\0';
-            nums[numCount++] = toNumber(buf);
-        }
-    }
-
     int opRow = rows - 1;
+
     for (int c = startCol; c <= endCol; c++) {
         char ch = char_at(lines, rowLens, opRow, c);
         if (ch == '+' || ch == '*') {
@@ -52,7 +35,26 @@ static void process_segment(char **lines, int rows, int *rowLens, int startCol, 
         }
     }
 
-    if (numCount == 0 || op == 0) {
+    if (op == 0) {
+        return;
+    }
+
+    for (int c = endCol; c >= startCol; c--) {
+        char buf[64];
+        int bi = 0;
+        for (int r = 0; r < opRow; r++) {
+            char ch = char_at(lines, rowLens, r, c);
+            if (isdigit((unsigned char)ch)) {
+                buf[bi++] = ch;
+            }
+        }
+        buf[bi] = '\0';
+        if (bi > 0) {
+            nums[numCount++] = toNumber(buf);
+        }
+    }
+
+    if (numCount == 0) {
         return;
     }
 
@@ -97,13 +99,13 @@ void aocday6(char **lines, int rows, long long *outTotal) {
             inSegment = 1;
             segStart = c;
         } else if (inSegment && emptyCol) {
-            process_segment(lines, rows, rowLens, segStart, c - 1, &total);
+            process_segment_part2(lines, rows, rowLens, segStart, c - 1, &total);
             inSegment = 0;
         }
     }
 
     if (inSegment) {
-        process_segment(lines, rows, rowLens, segStart, cols - 1, &total);
+        process_segment_part2(lines, rows, rowLens, segStart, cols - 1, &total);
     }
 
     *outTotal = total;
