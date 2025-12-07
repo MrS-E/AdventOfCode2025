@@ -7,4 +7,5 @@ add_executable(AdventOfCode2025 main.c
         day2.c
         day3.c
         day4.c
-        day6.c)
+        day6.c
+        day7.c)
