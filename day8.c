@@ -3,13 +3,10 @@
 //
 
 #include <ctype.h>
-#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#define K_NEAREST 1000
 
 typedef struct {
    int32_t x, y, z;
@@ -20,50 +17,6 @@ typedef struct {
    int a;
    int b;
 } Edge;
-
-static void heap_swap(Edge *a, Edge *b) {
-   Edge tmp = *a;
-   *a = *b;
-   *b = tmp;
-}
-
-static void heap_sift_up(Edge *heap, int idx) {
-   while (idx > 0) {
-      int parent = (idx - 1) / 2;
-      if (heap[parent].dist >= heap[idx].dist)
-         break;
-      heap_swap(&heap[parent], &heap[idx]);
-      idx = parent;
-   }
-}
-
-static void heap_sift_down(Edge *heap, int size, int idx) {
-   while (true) {
-      int left = 2 * idx + 1;
-      int right = left + 1;
-      int largest = idx;
-
-      if (left < size && heap[left].dist > heap[largest].dist)
-         largest = left;
-      if (right < size && heap[right].dist > heap[largest].dist)
-         largest = right;
-      if (largest == idx)
-         break;
-      heap_swap(&heap[idx], &heap[largest]);
-      idx = largest;
-   }
-}
-
-static void heap_insert_topk(Edge *heap, int *heap_size, const Edge *e) {
-   if (*heap_size < K_NEAREST) {
-      heap[*heap_size] = *e;
-      heap_sift_up(heap, *heap_size);
-      (*heap_size)++;
-   } else if (e->dist < heap[0].dist) {
-      heap[0] = *e;
-      heap_sift_down(heap, *heap_size, 0);
-   }
-}
 
 typedef struct {
    int *parent;
@@ -145,12 +98,6 @@ static int cmp_edge(const void *a, const void *b) {
    return 0;
 }
 
-static int cmp_int_desc(const void *a, const void *b) {
-   int ia = *(const int *)a;
-   int ib = *(const int *)b;
-   return (ib - ia);
-}
-
 void aocday8(char **lines, size_t n_lines, uint64_t *out_answer) {
    if (!out_answer)
       return;
@@ -170,9 +117,16 @@ void aocday8(char **lines, size_t n_lines, uint64_t *out_answer) {
       return;
    }
 
-   Edge heap[K_NEAREST];
-   int heap_size = 0;
+   if (n == 1) {
+      free(points);
+      *out_answer = 0;
+      return;
+   }
 
+   size_t edges_count = (n * (n - 1)) / 2;
+   Edge *edges = malloc(edges_count * sizeof(Edge));
+
+   size_t idx = 0;
    for (size_t i = 0; i < n; ++i) {
       for (size_t j = i + 1; j < n; ++j) {
          int64_t dx = (int64_t)points[i].x - (int64_t)points[j].x;
@@ -180,51 +134,43 @@ void aocday8(char **lines, size_t n_lines, uint64_t *out_answer) {
          int64_t dz = (int64_t)points[i].z - (int64_t)points[j].z;
          uint64_t dist = (uint64_t)(dx * dx + dy * dy + dz * dz);
 
-         Edge e;
-         e.dist = dist;
-         e.a = (int)i;
-         e.b = (int)j;
-         heap_insert_topk(heap, &heap_size, &e);
+         edges[idx].dist = dist;
+         edges[idx].a = (int)i;
+         edges[idx].b = (int)j;
+         idx++;
       }
    }
 
-   int edges_count = heap_size;
-
-   Edge *edges = malloc((size_t)edges_count * sizeof(Edge));
-   for (int i = 0; i < edges_count; ++i) {
-      edges[i] = heap[i];
-   }
-
-   qsort(edges, (size_t)edges_count, sizeof(Edge), cmp_edge);
+   qsort(edges, edges_count, sizeof(Edge), cmp_edge);
 
    DSU dsu;
    dsu_init(&dsu, (int)n);
-   for (int i = 0; i < edges_count; ++i) {
-      dsu_union(&dsu, edges[i].a, edges[i].b);
-   }
 
-   int *sizes = malloc(n * sizeof(int));
-   int sizes_count = 0;
-   for (int i = 0; i < (int)n; ++i) {
-      if (dsu_find(&dsu, i) == i) {
-         sizes[sizes_count++] = dsu.sz[i];
+   int components = (int)n;
+   uint64_t result = 0;
+
+   for (size_t i = 0; i < edges_count && components > 1; ++i) {
+      Edge *e = &edges[i];
+
+      int ra = dsu_find(&dsu, e->a);
+      int rb = dsu_find(&dsu, e->b);
+      if (ra == rb)
+         continue;
+
+      dsu_union(&dsu, ra, rb);
+      components--;
+
+      if (components == 1) {
+         int64_t xa = points[e->a].x;
+         int64_t xb = points[e->b].x;
+         result = (uint64_t)(xa * xb);
+         break;
       }
    }
 
-   if (sizes_count == 0) {
-      *out_answer = 0;
-   } else {
-      qsort(sizes, (size_t)sizes_count, sizeof(int), cmp_int_desc);
-      uint64_t prod = 1;
-      int limit = sizes_count < 3 ? sizes_count : 3;
-      for (int i = 0; i < limit; ++i) {
-         prod *= (uint64_t)sizes[i];
-      }
-      *out_answer = prod;
-   }
+   *out_answer = result;
 
-   free(points);
-   free(edges);
-   free(sizes);
    dsu_free(&dsu);
+   free(edges);
+   free(points);
 }
