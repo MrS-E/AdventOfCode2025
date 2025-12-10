@@ -15,6 +15,13 @@ static int g_num_buttons;
 static uint64_t g_best;
 static int g_global_max_cov;
 
+typedef struct {
+   int nC;
+   int nB;
+   uint64_t target[MAX_COUNTERS];
+   uint64_t button_mask[MAX_BUTTONS];
+} Machine;
+
 static uint64_t button_dynamic_ub(int k) {
    uint64_t mask = g_button_mask[k];
    if (!mask)
@@ -65,26 +72,23 @@ static void dfs_joltage(int k, uint64_t presses) {
    }
    if (presses + lb >= g_best)
       return;
-
-   if (k == g_num_buttons) {
+   if (k == g_num_buttons)
       return;
-   }
-
    uint64_t mask = g_button_mask[k];
    uint64_t ub = button_dynamic_ub(k);
-   uint64_t applied = 0;
 
+   uint64_t applied = 0;
    for (uint64_t x = 0; x <= ub; x++) {
       if (presses + x >= g_best)
          break;
       if (x > 0) {
          for (int i = 0; i < g_num_counters; i++) {
-            if (mask & (1ULL << i)) {
+            if (mask & (1ULL << i))
                g_svals[i]++;
-            }
          }
          applied++;
       }
+
       int ok = 1;
       for (int i = 0; i < g_num_counters; i++) {
          if (g_svals[i] > g_target[i]) {
@@ -99,9 +103,8 @@ static void dfs_joltage(int k, uint64_t presses) {
 
    if (applied > 0) {
       for (int i = 0; i < g_num_counters; i++) {
-         if (mask & (1ULL << i)) {
+         if (mask & (1ULL << i))
             g_svals[i] -= applied;
-         }
       }
    }
 }
@@ -138,20 +141,23 @@ static void sort_buttons_by_coverage(void) {
    }
 }
 
-static int solve_machine(const char *line, uint64_t *out) {
-   if (!line)
+static int parse_machine_line(const char *line, Machine *m) {
+   if (!line || !m)
       return -1;
-   g_num_counters = 0;
+   m->nC = 0;
+   m->nB = 0;
    for (int i = 0; i < MAX_COUNTERS; i++)
-      g_target[i] = 0;
+      m->target[i] = 0;
+   for (int j = 0; j < MAX_BUTTONS; j++)
+      m->button_mask[j] = 0;
 
    const char *p = strchr(line, '{');
    if (!p)
-      return -2;
+      return -1;
    p++;
    const char *end = strchr(p, '}');
    if (!end)
-      return -3;
+      return -1;
 
    const char *q = p;
    while (q < end) {
@@ -170,25 +176,13 @@ static int solve_machine(const char *line, uint64_t *out) {
          val = val * 10 + (*q - '0');
          q++;
       }
-      if (g_num_counters >= MAX_COUNTERS)
-         return -4;
+      if (m->nC >= MAX_COUNTERS)
+         return -1;
       if (val < 0)
-         return -5;
-      g_target[g_num_counters++] = (uint64_t)(sign * val);
-
+         return -1;
+      m->target[m->nC++] = (uint64_t)(sign * val);
       while (q < end && (isspace((unsigned char)*q) || *q == ','))
          q++;
-   }
-
-   if (g_num_counters == 0) {
-      *out = 0;
-      return 0;
-   }
-
-   g_num_buttons = 0;
-   for (int j = 0; j < MAX_BUTTONS; j++) {
-      g_button_mask[j] = 0;
-      g_button_cov[j] = 0;
    }
 
    const char *limit = strchr(line, '{');
@@ -202,10 +196,9 @@ static int solve_machine(const char *line, uint64_t *out) {
          break;
       const char *close = strchr(open, ')');
       if (!close || close > limit)
-         return -6;
-
-      if (g_num_buttons >= MAX_BUTTONS)
-         return -7;
+         return -1;
+      if (m->nB >= MAX_BUTTONS)
+         return -1;
       uint64_t mask = 0;
 
       const char *r = open + 1;
@@ -214,56 +207,46 @@ static int solve_machine(const char *line, uint64_t *out) {
             r++;
          if (r >= close)
             break;
-
          int val = 0;
          while (r < close && isdigit((unsigned char)*r)) {
             val = val * 10 + (*r - '0');
             r++;
          }
          if (val < 0 || val >= MAX_COUNTERS)
-            return -8;
+            return -1;
          mask |= (1ULL << val);
       }
-
-      g_button_mask[g_num_buttons] = mask;
-      g_button_cov[g_num_buttons] = popcount64(mask);
-      g_num_buttons++;
-
+      m->button_mask[m->nB++] = mask;
       s = close + 1;
    }
+   return 0;
+}
 
-   if (g_num_buttons == 0) {
-      for (int i = 0; i < g_num_counters; i++)
-         if (g_target[i] != 0)
-            return -9;
-      return 0;
-   }
+static int solve_machine_dfs(const Machine *m, uint64_t *out) {
+   g_num_counters = m->nC;
+   g_num_buttons = m->nB;
 
    for (int i = 0; i < g_num_counters; i++) {
-      int touched = 0;
-      for (int j = 0; j < g_num_buttons; j++) {
-         if (g_button_mask[j] & (1ULL << i)) {
-            touched = 1;
-            break;
-         }
-      }
-      if (!touched && g_target[i] > 0)
-         return -10;
+      g_target[i] = m->target[i];
+      g_svals[i] = 0;
+   }
+   for (int j = 0; j < g_num_buttons; j++) {
+      g_button_mask[j] = m->button_mask[j];
+      g_button_cov[j] = popcount64(m->button_mask[j]);
    }
 
    sort_buttons_by_coverage();
-
    g_global_max_cov = 0;
    for (int j = 0; j < g_num_buttons; j++) {
       if (g_button_cov[j] > g_global_max_cov)
          g_global_max_cov = g_button_cov[j];
    }
 
-   for (int i = 0; i < g_num_counters; i++)
-      g_svals[i] = 0;
    g_best = UINT64_MAX;
-
    dfs_joltage(0, 0);
+
+   if (g_best == UINT64_MAX)
+      return -1;
    *out = g_best;
    return 0;
 }
@@ -273,13 +256,29 @@ int aocday10(char **lines, size_t n_lines, uint64_t *out) {
       return -1;
 
    for (size_t i = 0; i < n_lines; i++) {
-      uint64_t r;
-      int rc = solve_machine(lines[i], &r);
-      if (rc != 0) {
+      Machine m;
+      if (parse_machine_line(lines[i], &m) != 0)
          return -1;
+
+      if (m.nB == 0) {
+         int ok = 1;
+         for (int c = 0; c < m.nC; c++) {
+            if (m.target[c] != 0) {
+               ok = 0;
+               break;
+            }
+         }
+         if (!ok)
+            return -1;
+         *out += 0;
+         continue;
       }
-      *out += r;
-      printf("%s %llu\n", lines[i], *out);
+
+      uint64_t target;
+      if (solve_machine_dfs(&m, &target) != 0)
+         return -1;
+      *out += target;
    }
+
    return 0;
 }
