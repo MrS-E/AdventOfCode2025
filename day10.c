@@ -3,75 +3,139 @@
 #include <stdio.h>
 #include <string.h>
 
-#define MAX_LIGHTS 64
+#define MAX_COUNTERS 64
 #define MAX_BUTTONS 64
 
-static int popcount64(uint64_t x) {
-#if defined(__GNUC__) || defined(__clang__)
-   return __builtin_popcountll(x);
-#else
-   int c = 0;
-   while (x) {
-      x &= (x - 1);
-      c++;
+static uint64_t g_target[MAX_COUNTERS];
+static uint64_t g_svals[MAX_COUNTERS];
+static uint64_t g_button_mask[MAX_BUTTONS];
+static uint64_t g_global_ub[MAX_BUTTONS];
+static int g_num_counters;
+static int g_num_buttons;
+static uint64_t g_best;
+
+static void dfs_joltage(int k, uint64_t presses) {
+   if (presses >= g_best)
+      return;
+
+   if (k == g_num_buttons) {
+      for (int i = 0; i < g_num_counters; i++) {
+         if (g_svals[i] != g_target[i])
+            return;
+      }
+      if (presses < g_best)
+         g_best = presses;
+      return;
    }
-   return c;
-#endif
+
+   uint64_t mask = g_button_mask[k];
+   uint64_t ub = g_global_ub[k];
+
+   uint64_t backup[MAX_COUNTERS];
+   for (int i = 0; i < g_num_counters; i++)
+      backup[i] = g_svals[i];
+
+   for (uint64_t x = 0; x <= ub; x++) {
+      if (presses + x >= g_best)
+         break;
+
+      if (x > 0) {
+         for (int i = 0; i < g_num_counters; i++) {
+            if (mask & (1ULL << i)) {
+               g_svals[i] += x;
+            }
+         }
+      }
+
+      int ok = 1;
+      for (int i = 0; i < g_num_counters; i++) {
+         if (g_svals[i] > g_target[i]) {
+            ok = 0;
+            break;
+         }
+      }
+
+      if (ok) {
+         dfs_joltage(k + 1, presses + x);
+      }
+
+      for (int i = 0; i < g_num_counters; i++)
+         g_svals[i] = backup[i];
+   }
 }
 
-static int solve_machine_line(const char *line, uint64_t *out) {
+static int solve_machine(const char *line, uint64_t *out) {
    if (!line)
       return -1;
 
-   uint64_t target_mask = 0;
-   uint64_t button_light_mask[MAX_BUTTONS];
-   int num_buttons = 0;
-   int num_lights = 0;
+   g_num_counters = 0;
+   for (int i = 0; i < MAX_COUNTERS; i++)
+      g_target[i] = 0;
 
-   for (int i = 0; i < MAX_BUTTONS; i++) {
-      button_light_mask[i] = 0;
-   }
-
-   const char *p = strchr(line, '[');
+   const char *p = strchr(line, '{');
    if (!p)
       return -2;
    p++;
-   const char *end = strchr(p, ']');
+   const char *end = strchr(p, '}');
    if (!end)
       return -3;
 
-   num_lights = (int)(end - p);
-   if (num_lights <= 0 || num_lights > MAX_LIGHTS)
-      return -4;
+   const char *q = p;
+   while (q < end) {
+      while (q < end && !isdigit((unsigned char)*q) && *q != '-')
+         q++;
+      if (q >= end)
+         break;
 
-   for (int i = 0; i < num_lights; i++) {
-      char c = p[i];
-      if (c == '#') {
-         target_mask |= (1ULL << i);
-      } else if (c == '.') {
-         // off
-      } else {
-         // invalid character
-         return -5;
+      int sign = 1;
+      if (*q == '-') {
+         sign = -1;
+         q++;
       }
+
+      long val = 0;
+      while (q < end && isdigit((unsigned char)*q)) {
+         val = val * 10 + (*q - '0');
+         q++;
+      }
+      if (g_num_counters >= MAX_COUNTERS)
+         return -4;
+      if (val < 0)
+         return -5;
+      g_target[g_num_counters++] = (uint64_t)(sign * val);
+
+      while (q < end && (isspace((unsigned char)*q) || *q == ','))
+         q++;
    }
 
-   const char *q = end + 1;
-   const char *brace = strchr(q, '{');
-   const char *limit = brace ? brace : (line + strlen(line));
+   if (g_num_counters == 0) {
+      *out = 0;
+      return 0;
+   }
 
-   while (q < limit) {
-      const char *open = strchr(q, '(');
+   g_num_buttons = 0;
+   for (int j = 0; j < MAX_BUTTONS; j++) {
+      g_button_mask[j] = 0;
+      g_global_ub[j] = 0;
+   }
+
+   const char *limit = strchr(line, '{');
+   if (!limit)
+      limit = line + strlen(line);
+
+   const char *s = line;
+   while (s < limit) {
+      const char *open = strchr(s, '(');
       if (!open || open >= limit)
          break;
       const char *close = strchr(open, ')');
       if (!close || close > limit)
          return -6;
 
-      if (num_buttons >= MAX_BUTTONS)
+      if (g_num_buttons >= MAX_BUTTONS)
          return -7;
-
       uint64_t mask = 0;
+
       const char *r = open + 1;
       while (r < close) {
          while (r < close && !isdigit((unsigned char)*r))
@@ -84,171 +148,59 @@ static int solve_machine_line(const char *line, uint64_t *out) {
             val = val * 10 + (*r - '0');
             r++;
          }
-         if (val < 0 || val >= MAX_LIGHTS) {
+         if (val < 0 || val >= MAX_COUNTERS)
             return -8;
-         }
          mask |= (1ULL << val);
       }
 
-      button_light_mask[num_buttons++] = mask;
-      q = close + 1;
+      g_button_mask[g_num_buttons++] = mask;
+      s = close + 1;
    }
 
-   if (num_buttons <= 0) {
-      if (target_mask == 0) {
-         *out = 0;
-         return 0;
-      }
-      return -9;
-   }
-
-   uint64_t rows[MAX_LIGHTS];
-   int b_vec[MAX_LIGHTS];
-
-   for (int i = 0; i < num_lights; i++) {
-      rows[i] = 0;
-      b_vec[i] = ((target_mask >> i) & 1ULL) ? 1 : 0;
-   }
-
-   for (int j = 0; j < num_buttons; j++) {
-      uint64_t bm = button_light_mask[j];
-      for (int i = 0; i < num_lights; i++) {
-         if (bm & (1ULL << i)) {
-            rows[i] |= (1ULL << j);
-         }
-      }
-   }
-
-   int pivot_col_for_row[MAX_LIGHTS];
-   int pivot_row_for_col[MAX_BUTTONS];
-   for (int i = 0; i < num_lights; i++)
-      pivot_col_for_row[i] = -1;
-   for (int j = 0; j < num_buttons; j++)
-      pivot_row_for_col[j] = -1;
-
-   int row = 0;
-   for (int col = 0; col < num_buttons && row < num_lights; col++) {
-      int sel = -1;
-      for (int i = row; i < num_lights; i++) {
-         if ((rows[i] >> col) & 1ULL) {
-            sel = i;
-            break;
-         }
-      }
-      if (sel == -1) {
-         continue;
-      }
-
-      if (sel != row) {
-         uint64_t tmp_row = rows[row];
-         rows[row] = rows[sel];
-         rows[sel] = tmp_row;
-
-         int tmp_b = b_vec[row];
-         b_vec[row] = b_vec[sel];
-         b_vec[sel] = tmp_b;
-      }
-
-      pivot_col_for_row[row] = col;
-      pivot_row_for_col[col] = row;
-
-      for (int i = 0; i < num_lights; i++) {
-         if (i != row && ((rows[i] >> col) & 1ULL)) {
-            rows[i] ^= rows[row];
-            b_vec[i] ^= b_vec[row];
-         }
-      }
-
-      row++;
-   }
-
-   int rank = row;
-
-   for (int i = rank; i < num_lights; i++) {
-      if (rows[i] == 0 && b_vec[i] == 1) {
-         return -10;
-      }
-   }
-
-   int free_cols[MAX_BUTTONS];
-   int num_free = 0;
-   for (int col = 0; col < num_buttons; col++) {
-      if (pivot_row_for_col[col] == -1) {
-         free_cols[num_free++] = col;
-      }
-   }
-
-   uint64_t x0 = 0;
-
-   for (int col = num_buttons - 1; col >= 0; col--) {
-      int prow = pivot_row_for_col[col];
-      if (prow == -1) {
-         continue;
-      }
-      int val = b_vec[prow];
-      uint64_t rowmask = rows[prow];
-
-      for (int j = col + 1; j < num_buttons; j++) {
-         if ((rowmask >> j) & 1ULL) {
-            if ((x0 >> j) & 1ULL) {
-               val ^= 1;
-            }
-         }
-      }
-      if (val & 1) {
-         x0 |= (1ULL << col);
-      }
-   }
-
-   uint64_t basis[MAX_BUTTONS];
-   for (int i = 0; i < num_free; i++) {
-      int fcol = free_cols[i];
-      uint64_t vec = 0;
-      vec |= (1ULL << fcol);
-
-      for (int col = num_buttons - 1; col >= 0; col--) {
-         int prow = pivot_row_for_col[col];
-         if (prow == -1) {
-            continue;
-         }
-         int val = 0;
-         uint64_t rowmask = rows[prow];
-
-         for (int j = col + 1; j < num_buttons; j++) {
-            if ((rowmask >> j) & 1ULL) {
-               if ((vec >> j) & 1ULL) {
-                  val ^= 1;
-               }
-            }
-         }
-         if (val & 1) {
-            vec |= (1ULL << col);
-         }
-      }
-      basis[i] = vec;
-   }
-
-   if (num_free > 20) {
-      *out = (uint64_t)popcount64(x0);
+   if (g_num_buttons == 0) {
+      for (int i = 0; i < g_num_counters; i++)
+         if (g_target[i] != 0)
+            return -9;
       return 0;
    }
 
-   uint64_t best = (uint64_t)popcount64(x0);
-   uint64_t total_combos = (num_free > 0) ? (1ULL << num_free) : 1ULL;
-
-   for (uint64_t mask = 1; mask < total_combos; mask++) {
-      uint64_t x = x0;
-      for (int i = 0; i < num_free; i++) {
-         if ((mask >> i) & 1ULL) {
-            x ^= basis[i];
+   for (int i = 0; i < g_num_counters; i++) {
+      int touched = 0;
+      for (int j = 0; j < g_num_buttons; j++) {
+         if (g_button_mask[j] & (1ULL << i)) {
+            touched = 1;
+            break;
          }
       }
-      int w = popcount64(x);
-      if ((uint64_t)w < best) {
-         best = (uint64_t)w;
-      }
+      if (!touched && g_target[i] > 0)
+         return -10;
    }
-   *out = best;
+
+   for (int j = 0; j < g_num_buttons; j++) {
+      uint64_t mask = g_button_mask[j];
+      uint64_t ub = UINT64_MAX;
+      int has = 0;
+
+      for (int i = 0; i < g_num_counters; i++) {
+         if (mask & (1ULL << i)) {
+            has = 1;
+            if (g_target[i] < ub)
+               ub = g_target[i];
+         }
+      }
+
+      if (!has)
+         ub = 0;
+      g_global_ub[j] = ub;
+   }
+
+   for (int i = 0; i < g_num_counters; i++)
+      g_svals[i] = 0;
+   g_best = UINT64_MAX;
+
+   dfs_joltage(0, 0);
+
+   *out = g_best;
    return 0;
 }
 
@@ -257,16 +209,13 @@ int aocday10(char **lines, size_t n_lines, uint64_t *out) {
       return -1;
 
    for (size_t i = 0; i < n_lines; i++) {
-      const char *line = lines[i];
-      if (!line) {
-         return -1;
-      }
       uint64_t r;
-      int rc = solve_machine_line(line, &r);
+      int rc = solve_machine(lines[i], &r);
       if (rc != 0) {
          return -1;
       }
       *out += r;
+      printf("%llu\n", *out);
    }
    return 0;
 }
