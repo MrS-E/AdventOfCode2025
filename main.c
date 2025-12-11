@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "day10.c"
+#include "day11.c"
 #include "day2.c"
 #include "day3.c"
 #include "day4.c"
@@ -68,7 +69,7 @@ void free_lines(char **lines, size_t len) {
 int main(void) {
    int rc = 0;
 
-   goto laocday10;
+   goto laocday11;
 
 laocday1:
 
@@ -121,6 +122,7 @@ laocday8:
    size_t day8len = 0;
    char **day8lines = read_lines("day8input", &day8len);
    aocday8(day8lines, day8len, &answer);
+   free_lines(day8lines, day8len);
    printf("Day 8: %llu\n", (unsigned long long)answer);
 
 laocday9:
@@ -130,7 +132,16 @@ laocday10:
    size_t day10len = 0;
    char **day10lines = read_lines("day10input", &day10len);
    rc = aocday10(day10lines, day10len, &day10);
+   free_lines(day10lines, day10len);
    printf("Day 10: %llu\n", day10);
+
+laocday11:
+   uint64_t day11;
+   size_t day11len = 0;
+   char **day11lines = read_lines("day11input", &day11len);
+   rc = aocday11(day11lines, day11len, &day11);
+   free_lines(day11lines, day11len);
+   printf("Day 11: %llu\n", day11);
 
    return rc;
 }
